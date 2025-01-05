@@ -1,0 +1,161 @@
+<html>
+<head>
+    <style>
+        .line-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .line-item {
+        }
+        .line-header {
+            margin-bottom: 10px;
+        }
+        .chip-container {
+            display: flex;
+            gap: 10px;
+            margin: 5px 0;
+            overflow: scroll;
+        }
+        .chip {
+            min-width: 70px;
+            text-align: center;
+            padding: 10px 8px;
+            background-color: var(--homey-color-blue);
+            border-radius: var(--homey-border-radius-default);
+        }
+        .custom-image-class {
+            margin: var(--homey-su-3) auto var(--homey-su-5);
+        }
+    </style>
+</head>
+<body class="homey-widget">
+    <div class="line-container" id="departureList"></div>
+    <script type="text/javascript">
+        let stopToken = 'NSR:StopPlace:58243';
+        
+        function addMinutes(date, minutes) {
+            return new Date(date.getTime() + minutes*60000);
+        }
+    
+        function getHourMinutesFormat(dateTime) {
+            const now = new Date();
+            const tooFarIntoFuture = dateTime > addMinutes(now, 20);
+    
+            if (tooFarIntoFuture) {
+                let hour = dateTime.getHours();
+                let minute = dateTime.getMinutes();
+                return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+            } else {
+                let minutesIntoFuture = dateTime - now;
+                let diff = Math.round((minutesIntoFuture / 1000) / 60);
+                return diff + " min";
+            }
+        }
+    
+        function queryForStop(stopId) {
+            return `{
+                        stopPlace(id: "STOP_TOKEN") {
+                          name
+                          id
+                          estimatedCalls(numberOfDepartures: 10) {
+                            expectedDepartureTime
+                            aimedDepartureTime
+                            destinationDisplay {
+                              frontText
+                            }
+                            serviceJourney {
+                              line {
+                                publicCode
+                                transportMode
+                              }
+                            }
+                          }
+                        }
+                      }
+                      `.replace('STOP_TOKEN', stopId)
+        }
+    
+        function getDepartures () {
+            stopToken = this.homey.settings.get('stopToken');
+            if (!stopToken || stopToken.length === 0)
+                stopToken = 'NSR:StopPlace:58243';
+            
+            fetch('https://api.entur.io/journey-planner/v3/graphql', {
+                method: 'POST',
+                headers: {
+                    'ET-Client-Name': 'haleyproductions-ruter',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query: queryForStop(stopToken) }),
+            })
+                .then(res => res.json())
+                .then(stopPlaceData => {
+                    let newDepartures = stopPlaceData.data.stopPlace.estimatedCalls.map((call) => ({
+                        id: `${stopToken}-${call.aimedDepartureTime}`,
+                        expectedDepartureTime: new Date(call.expectedDepartureTime),
+                        destinationDisplay: call.destinationDisplay,
+                        serviceJourney: call.serviceJourney,
+                    }))
+    
+                    let groupedDepartures = [];
+    
+                    newDepartures.map(stopPlace => {
+                        const existingLineIndex = groupedDepartures.findIndex(x => x.serviceJourney.line.publicCode == stopPlace.serviceJourney.line.publicCode);
+                        if (existingLineIndex >= 0) {
+                            groupedDepartures[existingLineIndex].departures.push(stopPlace.expectedDepartureTime);
+                        }
+                        else {
+                            groupedDepartures.push({
+                                serviceJourney: stopPlace.serviceJourney,
+                                destinationDisplay: stopPlace.destinationDisplay,
+                                departures: [stopPlace.expectedDepartureTime],
+                            })
+                        }
+                    });
+    
+                    // Generate HTML List using stopPlaceData
+                    let stopPlaceListHTML = groupedDepartures.map((departure) =>
+                        `<div class="line-item">
+                                    <h4 class="line-header">${departure.serviceJourney.line.publicCode} ${departure.destinationDisplay.frontText}</h4>
+                                    <div class="chip-container">
+                                        ${departure.departures.map(departureTime =>
+                            `<div class="chip">${getHourMinutesFormat(departureTime)}</div>`
+                        ).join('')}
+                                    </div>
+                                </div>`
+                    ).join('');
+    
+                    document.getElementById("departureList").innerHTML = stopPlaceListHTML;
+                })
+                .catch(error => {
+                    console.log(error)
+                });
+        }
+    
+        function onHomeyReady(Homey) {
+            Homey.ready();
+    
+            // Fetch something from your app.
+            Homey.api('GET', '/', {})
+                .then((result) => {
+                    console.log(result);
+                })
+                .catch(console.error);
+            
+            var departureList = document.getElementById("departureList");
+            departureList.innerHTML = 'Loading...'
+
+            Homey.settings.get('stopToken', (err, result) => {
+                if (err) return Homey.alert(err);
+                departureList.innerHTML = 'NSR:StopPlace:58243';
+            });
+
+            return;
+
+            getDepartures();
+            setInterval(getDepartures, 5000);
+        }
+    </script>
+</body>
+</html>

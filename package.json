@@ -1,0 +1,13 @@
+{
+  "name": "com.haleyproductions.ruter",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {},
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "moment": "^2.30.1"
+  },
+  "devDependencies": {
+    "@types/homey": "npm:homey-apps-sdk-v3-types@^0.3.10"
+  }
+}

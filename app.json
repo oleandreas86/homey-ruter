@@ -1,0 +1,58 @@
+{
+  "_comment": "This file is generated. Please edit .homeycompose/app.json instead.",
+  "id": "com.haleyproductions.ruter",
+  "version": "1.0.0",
+  "compatibility": ">=12.1.0",
+  "sdk": 3,
+  "platforms": [
+    "local",
+    "cloud"
+  ],
+  "name": {
+    "en": "Ruter"
+  },
+  "description": {
+    "en": "Adds Ruter.no functionality to your Homey"
+  },
+  "category": [
+    "internet"
+  ],
+  "permissions": [],
+  "images": {
+    "small": "/assets/images/small.png",
+    "large": "/assets/images/large.png",
+    "xlarge": "/assets/images/xlarge.png"
+  },
+  "author": {
+    "name": "Ole Andreas Haley",
+    "email": "oleandreas86@gmail.com"
+  },
+  "widgets": {
+    "departures": {
+      "name": {
+        "en": "Departures"
+      },
+      "height": 188,
+      "settings": [],
+      "api": {
+        "getSomething": {
+          "method": "GET",
+          "path": "/"
+        },
+        "addSomething": {
+          "method": "POST",
+          "path": "/"
+        },
+        "updateSomething": {
+          "method": "PUT",
+          "path": "/:id"
+        },
+        "deleteSomething": {
+          "method": "DELETE",
+          "path": "/:id"
+        }
+      },
+      "id": "departures"
+    }
+  }
+}
