@@ -26,14 +26,12 @@
     "name": "Ole Andreas Haley",
     "email": "oleandreas86@gmail.com"
   },
+  "settings": { "path": "settings/index.html" },
   "widgets": {
     "departures": {
       "title": { "en": "Departures" },
-      "path": "widgets/0/public/index.html",
-      "size": { "width": 3, "height": 3 },
-      "settings": {
-        "path": "widgets/0/public/settings.html"
-      }
+      "path": "widgets/departures/public/index.html",
+      "size": { "width": 3, "height": 3 }
     }
   }
 }
