@@ -1,45 +1,352 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-    <!-- The '/homey.js' script must be included in your settings view to work -->
-    <script
-            type="text/javascript"
-            src="/homey.js"
-            data-origin="settings"
-    ></script>
+  <meta charset="utf-8" />
+  <title>Entur Settings</title>
+  <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
+  <style>
+    :root { --gap: 10px; }
+    body { font: 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 16px; }
+    h2, h3 { margin: 0 0 8px; }
+    .section { margin: 16px 0 24px; }
+    label { display:block; margin: 12px 0 4px; }
+    input[type="text"], input[type="number"], select { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #f7f7f7; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: var(--gap); align-items: end; }
+    .help { color: #666; font-size: 12px; margin-top: 6px; }
+    .muted { color: #666; }
+    .error { color: #b00020; margin-top: 8px; }
+    .success { color: #0a7c2e; margin-top: 8px; }
+    .results { border: 1px solid #ddd; border-radius: 8px; margin-top: 6px; overflow: hidden; }
+    .result { padding: 8px; border-top: 1px solid #eee; cursor: pointer; }
+    .result:first-child { border-top: 0; }
+    .result:hover { background: #f4f6f8; }
+    .lines { border: 1px solid #ddd; border-radius: 8px; padding: 8px; max-height: 260px; overflow: auto; }
+    .line-row { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; padding: 4px 2px; }
+    .toolbar { display:flex; gap: 8px; margin: 8px 0; }
+    .small { font-size: 12px; }
+  </style>
 </head>
 <body>
-<fieldset class="homey-form-fieldset">
-    <legend class="homey-form-legend">Settings</legend>
+<h2>Entur Defaults</h2>
 
-    <div class="homey-form-group">
-        <label class="homey-form-label" for="stopToken">Stop Token</label>
-        <input class="homey-form-input" id="stopToken" type="text" value="" />
+<!-- Stop search / selection -->
+<div class="section">
+  <label for="search">Search Stop (autocomplete)</label>
+  <div class="row">
+    <input id="search" type="text" placeholder="Type stop name, e.g. 'Jernbanetorget'" autocomplete="off" />
+    <button id="clearSearch" type="button">Clear</button>
+  </div>
+  <div id="results" class="results" style="display:none;"></div>
+  <div id="chosenStop" class="help muted">No stop selected yet.</div>
+  <div id="searchError" class="error" style="display:none;"></div>
+  <div class="help">Uses Entur Geocoder <code>/geocoder/v1/autocomplete</code> to fetch NSR StopPlace IDs.</div>
+</div>
+
+<!-- Lines multi-select -->
+<div class="section">
+  <div class="row">
+    <div>
+      <label>Lines at selected stop</label>
+      <div class="help">Load upcoming departures and pick which lines to show by default.</div>
     </div>
-</fieldset>
+    <div class="toolbar">
+      <button id="loadLines" type="button" disabled>Load lines</button>
+      <button id="selectAll" type="button" disabled class="small">Select all</button>
+      <button id="selectNone" type="button" disabled class="small">None</button>
+    </div>
+  </div>
+  <div id="linesBox" class="lines muted">Select a stop first.</div>
+  <div id="linesMsg" class="help"></div>
+</div>
 
-<button id="save" class="homey-button-primary-full">Save changes</button>
+<!-- Display defaults -->
+<div class="section">
+  <h3>Display Defaults</h3>
 
-<script type="text/javascript">
-    // a method named 'onHomeyReady' must be present in your code
-    function onHomeyReady(Homey) {
-        // Tell Homey we're ready to be displayed
-        Homey.ready();
+  <label for="defMaxResults">Max departures (1–400)</label>
+  <input id="defMaxResults" type="number" min="1" max="400" placeholder="e.g. 200" />
 
-        var stopTokenElement = document.getElementById("stopToken");
-        var saveElement = document.getElementById("save");
+  <label for="defMinutesAhead">Minutes ahead (5–600)</label>
+  <input id="defMinutesAhead" type="number" min="5" max="600" placeholder="e.g. 180" />
 
-        Homey.get("stopToken", function (err, username) {
-            if (err) return Homey.alert(err);
-            stopTokenElement.value = username;
+  <label for="defDirection">Direction</label>
+  <select id="defDirection">
+    <option value="any">Any</option>
+    <option value="outbound">Outbound</option>
+    <option value="inbound">Inbound</option>
+  </select>
+
+  <label for="defTimeFormat">Time format</label>
+  <select id="defTimeFormat">
+    <option value="auto">Auto (system locale)</option>
+    <option value="24h">24-hour</option>
+    <option value="12h">12-hour</option>
+  </select>
+  <div class="help">These act as defaults for all widgets unless a widget overrides them.</div>
+</div>
+
+<!-- Save -->
+<div class="section">
+  <button id="save" type="button">Save settings</button>
+  <span id="saveMsg" class="success" style="display:none;">Saved.</span>
+</div>
+
+<script>
+  const GEOCODER_URL = 'https://api.entur.io/geocoder/v1/autocomplete';
+  const JP_URL       = 'https://api.entur.io/journey-planner/v3/graphql';
+  const CLIENT_NAME  = 'com.haleyproductions.ruter';
+
+  let HomeyApi;
+  let state = {
+    stopId: '',
+    stopName: '',
+    lines: [],
+    selectedLines: new Set()
+  };
+
+  function setEl(id, prop, val){ const el = document.getElementById(id); el[prop] = val; return el; }
+  function show(id, yes){ document.getElementById(id).style.display = yes ? '' : 'none'; }
+  function escapeHTML(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+  function onHomeyReady(Homey) {
+    HomeyApi = Homey;
+    Homey.ready();
+
+    // Load saved defaults
+    Homey.get('defaultStopId',  (e,v)=>{ if(!e && v){ state.stopId=v; }});
+    Homey.get('defaultStopName',(e,v)=>{ if(!e && v){ state.stopName=v; } updateChosenStop(); });
+    Homey.get('defaultLines',   (e,v)=>{ if(!e && Array.isArray(v)){ state.selectedLines = new Set(v.map(String)); updateLinesSelectionUI(); } });
+
+    // Display defaults
+    Homey.get('defaultMaxResults',   (e,v)=>{ if(!e && v!=null) setEl('defMaxResults','value',v); });
+    Homey.get('defaultMinutesAhead', (e,v)=>{ if(!e && v!=null) setEl('defMinutesAhead','value',v); });
+    Homey.get('defaultDirection',    (e,v)=>{ if(!e && v)      setEl('defDirection','value',v); });
+    Homey.get('defaultTimeFormat',   (e,v)=>{ if(!e && v)      setEl('defTimeFormat','value',v); });
+
+    wireEvents();
+  }
+
+  function wireEvents(){
+    const search = document.getElementById('search');
+    let t;
+    search.addEventListener('input', () => {
+      clearTimeout(t);
+      const q = search.value.trim();
+      if (!q){ show('results', false); return; }
+      t = setTimeout(()=>doAutocomplete(q), 250);
+    });
+
+    document.getElementById('clearSearch').onclick = () => {
+      search.value = '';
+      show('results', false);
+    };
+
+    document.getElementById('loadLines').onclick = () => loadLinesForStop();
+    document.getElementById('selectAll').onclick = () => { state.selectedLines = new Set(state.lines.map(l=>String(l.code))); updateLinesSelectionUI(); };
+    document.getElementById('selectNone').onclick = () => { state.selectedLines = new Set(); updateLinesSelectionUI(); };
+
+    document.getElementById('save').onclick = saveAll;
+  }
+
+  async function doAutocomplete(text){
+    const resBox = document.getElementById('results');
+    const errBox = document.getElementById('searchError');
+    errBox.style.display = 'none';
+
+    try{
+      const url = new URL(GEOCODER_URL);
+      url.searchParams.set('text', text);
+      url.searchParams.set('lang','en');
+      url.searchParams.set('size','8');
+      const r = await fetch(url.toString(), {
+        headers: { 'ET-Client-Name': CLIENT_NAME }
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = await r.json();
+
+      const stops = (json.features || [])
+              .filter(f => f.properties?.id?.startsWith('NSR:StopPlace:'))
+              .map(f => ({
+                id: f.properties.id,
+                name: f.properties.name,
+                label: f.properties.label || f.properties.name
+              }));
+
+      if (stops.length === 0){
+        resBox.innerHTML = '<div class="result muted">No stops found</div>';
+        show('results', true);
+        return;
+      }
+
+      resBox.innerHTML = stops.map(s => `
+            <div class="result" data-id="${escapeHTML(s.id)}" data-name="${escapeHTML(s.name)}">
+              ${escapeHTML(s.label)} <span class="muted">(${escapeHTML(s.id)})</span>
+            </div>`).join('');
+
+      for (const el of resBox.querySelectorAll('.result')){
+        el.addEventListener('click', () => {
+          state.stopId = el.getAttribute('data-id');
+          state.stopName = el.getAttribute('data-name');
+          state.lines = [];
+          state.selectedLines = new Set(); // reset selection
+          updateChosenStop();
+          updateLinesSelectionUI();
+          show('results', false);
         });
+      }
 
-        saveElement.addEventListener("click", function (e) {
-            Homey.set("stopToken", stopTokenElement.value, function (err) {
-                if (err) return Homey.alert(err);
-            });
-        });
+      show('results', true);
+
+    }catch(err){
+      errBox.textContent = 'Autocomplete error: ' + err.message;
+      errBox.style.display = 'block';
     }
+  }
+
+  function updateChosenStop(){
+    const chosen = document.getElementById('chosenStop');
+    if (state.stopId){
+      chosen.innerHTML = `Selected: <strong>${escapeHTML(state.stopName)}</strong> <span class="muted">(${escapeHTML(state.stopId)})</span>`;
+      setButtonsEnabled(true);
+      setEl('linesBox','innerHTML','Click “Load lines” to fetch upcoming lines.');
+      document.getElementById('linesBox').classList.remove('muted');
+    } else {
+      chosen.textContent = 'No stop selected yet.';
+      setButtonsEnabled(false);
+      setEl('linesBox','innerHTML','Select a stop first.');
+      document.getElementById('linesBox').classList.add('muted');
+    }
+  }
+
+  function setButtonsEnabled(enabled){
+    ['loadLines','selectAll','selectNone'].forEach(id => {
+      document.getElementById(id).disabled = !enabled;
+    });
+  }
+
+  async function loadLinesForStop(){
+    if (!state.stopId) return;
+
+    setEl('linesBox','innerHTML','Loading…');
+    const query = `
+          query Departures($stopId: String!, $n: Int!, $timeRange: Int!) {
+            stopPlace(id: $stopId) {
+              id
+              estimatedCalls(numberOfDepartures: $n, timeRange: $timeRange) {
+                serviceJourney { line { id name publicCode transportMode } }
+                destinationDisplay { frontText }
+              }
+            }
+          }
+        `;
+    const body = JSON.stringify({ query, variables: { stopId: state.stopId, n: 100, timeRange: 6*3600 } });
+
+    try{
+      const r = await fetch(JP_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ET-Client-Name': CLIENT_NAME
+        },
+        body
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = await r.json();
+      if (json.errors?.length) throw new Error(json.errors.map(e=>e.message).join('; '));
+
+      const calls = json?.data?.stopPlace?.estimatedCalls || [];
+      const uniq = new Map();
+      for (const c of calls){
+        const line = c?.serviceJourney?.line;
+        const code = line?.publicCode || '';
+        const name = line?.name || code || '';
+        if (!code && !name) continue;
+        const key = String(code || name);
+        const id = line?.id || '';
+        if (!uniq.has(key)) uniq.set(key, { id: String(id), code: key, name: String(name) });
+      }
+      state.lines = Array.from(uniq.values()).sort((a,b)=> String(a.code).localeCompare(String(b.code), 'nb'));
+
+      if (state.lines.length === 0){
+        setEl('linesBox','innerHTML','No upcoming lines found in the next 6 hours.');
+        return;
+      }
+
+      state.selectedLines = new Set(
+              Array.from(state.selectedLines).filter(code => state.lines.some(l => String(l.code) === String(code)))
+      );
+
+      updateLinesSelectionUI();
+
+    }catch(err){
+      setEl('linesBox','innerHTML', `<div class="error">Failed to load lines: ${escapeHTML(err.message)}</div>`);
+    }
+  }
+
+  function updateLinesSelectionUI(){
+    const box = document.getElementById('linesBox');
+    if (!state.stopId){
+      box.innerHTML = 'Select a stop first.';
+      box.classList.add('muted');
+      return;
+    }
+    box.classList.remove('muted');
+
+    if (state.lines.length === 0){
+      box.innerHTML = 'No lines loaded yet.';
+      return;
+    }
+
+    box.innerHTML = state.lines.map(l => {
+      const id = `line_${CSS.escape(String(l.code))}`;
+      const checked = state.selectedLines.has(String(l.code)) ? 'checked' : '';
+      const label = escapeHTML(l.code) + (l.name && l.name !== l.code ? ` — ${escapeHTML(l.name)}` : '');
+      return `
+            <div class="line-row">
+              <input type="checkbox" id="${id}" data-code="${escapeHTML(String(l.code))}" ${checked}/>
+              <label for="${id}">${label}</label>
+            </div>
+          `;
+    }).join('');
+
+    for (const cb of box.querySelectorAll('input[type="checkbox"]')){
+      cb.addEventListener('change', e => {
+        const code = e.target.getAttribute('data-code');
+        if (e.target.checked) state.selectedLines.add(String(code));
+        else state.selectedLines.delete(String(code));
+      });
+    }
+  }
+
+  function saveAll(){
+    const msg = document.getElementById('saveMsg');
+    msg.style.display = 'none';
+
+    // Display defaults
+    const maxR = Math.max(1, Math.min(50,  Number(document.getElementById('defMaxResults').value || 50)));
+    const mins = Math.max(5, Math.min(480, Number(document.getElementById('defMinutesAhead').value || 120)));
+    const dir  = String(document.getElementById('defDirection').value || 'any');
+    const tfmt = String(document.getElementById('defTimeFormat').value || 'auto');
+
+    HomeyApi.set('defaultStopId',        state.stopId, ()=>{});
+    HomeyApi.set('defaultStopName',      state.stopName, ()=>{});
+    HomeyApi.set('defaultLines',         Array.from(state.selectedLines), ()=>{});
+    // Save the IDs that correspond to the selected codes (if present)
+    const selectedIds = state.lines
+            .filter(l => state.selectedLines.has(String(l.code)))
+            .map(l => l.id)
+            .filter(Boolean);
+    HomeyApi.set('defaultLineIds', selectedIds, ()=>{});
+    HomeyApi.set('defaultMaxResults',    maxR, ()=>{});
+    HomeyApi.set('defaultMinutesAhead',  mins, ()=>{});
+    HomeyApi.set('defaultDirection',     dir,  ()=>{});
+    HomeyApi.set('defaultTimeFormat',    tfmt, ()=>{
+      msg.style.display = '';
+      setTimeout(()=> msg.style.display = 'none', 1500);
+    });
+  }
 </script>
 </body>
 </html>

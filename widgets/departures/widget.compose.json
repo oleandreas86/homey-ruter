@@ -1,25 +1,50 @@
 {
-  "name": {
-    "en": "Departures"
-  },
-  "height": 188,
-  "settings": [],
-  "api": {
-    "getSomething": {
-      "method": "GET",
-      "path": "/"
+  "name": { "en": "Departures" },
+  "height": 160,
+  "transparent": false,
+  "settings": [
+    {
+      "id": "useDefaults",
+      "type": "checkbox",
+      "title": { "en": "Use app defaults (stop & lines)" },
+      "value": true
     },
-    "addSomething": {
-      "method": "POST",
-      "path": "/"
+    {
+      "id": "maxResults",
+      "type": "number",
+      "title": { "en": "Max departures (override)" },
+      "min": 1,
+      "max": 400
     },
-    "updateSomething": {
-      "method": "PUT",
-      "path": "/:id"
+    {
+      "id": "minutesAhead",
+      "type": "number",
+      "title": { "en": "Minutes ahead (override)" },
+      "min": 5,
+      "max": 600
     },
-    "deleteSomething": {
-      "method": "DELETE",
-      "path": "/:id"
+    {
+      "id": "direction",
+      "type": "dropdown",
+      "title": { "en": "Direction (override)" },
+      "values": [
+        { "id": "any", "title": { "en": "Any" } },
+        { "id": "outbound", "title": { "en": "Outbound" } },
+        { "id": "inbound", "title": { "en": "Inbound" } }
+      ]
+    },
+    {
+      "id": "timeFormat",
+      "type": "dropdown",
+      "title": { "en": "Time format (override)" },
+      "values": [
+        { "id": "auto", "title": { "en": "Auto (system locale)" } },
+        { "id": "24h",  "title": { "en": "24-hour" } },
+        { "id": "12h",  "title": { "en": "12-hour" } }
+      ]
     }
+  ],
+  "api": {
+    "getDepartures": { "method": "GET", "path": "/" }
   }
 }

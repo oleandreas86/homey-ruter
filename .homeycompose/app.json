@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "compatibility": ">=12.1.0",
   "sdk": 3,
+  "brandColor": "#0066CC",
   "platforms": [
     "local",
     "cloud"
@@ -19,11 +20,20 @@
   "permissions": [],
   "images": {
     "small": "/assets/images/small.png",
-    "large": "/assets/images/large.png",
-    "xlarge": "/assets/images/xlarge.png"
+    "large": "/assets/images/large.png"
   },
   "author": {
     "name": "Ole Andreas Haley",
     "email": "oleandreas86@gmail.com"
+  },
+  "widgets": {
+    "departures": {
+      "title": { "en": "Departures" },
+      "path": "widgets/0/public/index.html",
+      "size": { "width": 3, "height": 3 },
+      "settings": {
+        "path": "widgets/0/public/settings.html"
+      }
+    }
   }
 }

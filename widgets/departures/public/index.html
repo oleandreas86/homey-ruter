@@ -1,161 +1,372 @@
+<!doctype html>
 <html>
 <head>
+    <meta charset="utf-8" />
+    <title>Departures</title>
+    <script type="text/javascript" src="/homey.js" data-origin="widget"></script>
     <style>
-        .line-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+        :root {
+            --pad: 10px;
+            --radius: 10px;
+            --topbar-h: 40px; /* visual height for header; not used for sticky calc */
         }
-        .line-item {
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body {
+            font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            color: var(--homey-color-on-surface);
+            background: var(--homey-color-surface);
         }
-        .line-header {
-            margin-bottom: 10px;
+
+        .wrap { display: flex; flex-direction: column; height: 100%; }
+
+        /* Top bar stays fixed above content area; content itself scrolls */
+        .top {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px var(--pad);
+            height: var(--topbar-h);
+            border-bottom: 1px solid var(--homey-color-separator);
+            background: var(--homey-background-color);
+            position: sticky; top: 0; z-index: 5;
         }
-        .chip-container {
-            display: flex;
-            gap: 10px;
-            margin: 5px 0;
-            overflow: scroll;
+        .title { display:flex; align-items:center; gap: 8px; font-weight: 700; }
+        .badge {
+            font-size: 10px; padding: 1px 6px; border-radius: 999px;
+            border: 1px solid var(--homey-color-separator);
+            background: var(--homey-color-surface-2);
         }
+        .actions { display:flex; gap: 6px; }
+        button { border: 0; padding: 6px 10px; border-radius: 8px; background: var(--homey-color-surface-2); cursor: pointer; }
+
+        /* Content is the scroll container. No top padding => list starts immediately */
+        .content { overflow: auto; padding: 0 var(--pad) var(--pad); }
+
+        /* Groups: simple, no spacer hacks */
+        .group { margin: 0; padding: 0; }
+        .group + .group { border-top: 1px solid var(--homey-color-separator); }
+
+        /* Sticky line header pins to TOP OF .content (so top: 0) */
+        .groupHead {
+            position: sticky; top: 0; z-index: 2;
+            background: var(--homey-background-color);
+            display:flex; 
+            align-items: center; 
+            gap: 8px;
+            padding: 6px 0;
+            box-shadow: 0 1px 0 var(--homey-color-separator);
+        }
+
+        /* Keep the header centered */
+        .groupHead { align-items: center; }
+
+        /* Code pill content centered */
+        .lineCode { display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
+
+        /* Baseline for all icons */
+        .modeIcon {
+          display: inline-block;
+          font-size: 1.1em;
+          line-height: 1;
+          margin: 0;
+          vertical-align: middle;
+          font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji', system-ui, sans-serif;
+          transform: translateY(-0.08em); /* default nudge */
+        }
+
+        /* Per-mode fine-tuning (tweak values to taste/platform) */
+        .modeIcon[data-mode="metro"] { transform: translateY(-0.16em); }   /* 🚇 tends to sit lower */
+        .modeIcon[data-mode="tram"]  { transform: translateY(-0.08em); }   /* 🚊 okay with default */
+        .modeIcon[data-mode="rail"]  { transform: translateY(-0.10em); }   /* 🚆 slight extra lift */
+        .modeIcon[data-mode="bus"]   { transform: translateY(-0.08em); }   /* 🚌 default is fine */
+        .modeIcon[data-mode="ferry"] { transform: translateY(-0.06em); }   /* ⛴️ a touch less */
+
+        .lineCode {
+            font-weight: 800; font-size: 14px;
+            padding: 2px 8px;
+            border: 1px solid var(--homey-color-separator);
+        }
+        .lineMeta { font-size: 11px; opacity: .7; }
+        
+        .modeIcon {
+            font-size: 14px;
+            line-height: 1;
+            margin-right: 6px;
+        }
+
+        /* Nudge the emoji up a touch so it visually centers */
+        .modeIcon {
+          display: inline-block;
+          font-size: 1.1em;     /* slight upsize looks nicer in a pill */
+          line-height: 1;
+          margin: 0;            /* rely on .lineCode spacing */
+          vertical-align: middle;
+          font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji', system-ui, sans-serif;
+          transform: translateY(-0.08em); /* tweak between -0.06em and -0.12em to taste */
+        }
+
+        /* Chips row (horizontal scroll) always under header */
+        .chips {
+            display: flex; gap: 8px;
+            overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+            margin: 8px 0 10px; /* clear space below header */
+            scroll-snap-type: x proximity;
+        }
+        .chips::-webkit-scrollbar { height: 6px; }
+        .chips::-webkit-scrollbar-thumb { background: var(--homey-color-separator); border-radius: 4px; }
+
+        /* Space between chips and the horizontal scrollbar */
+        .chips {
+          padding-bottom: 10px;          /* visual gap above the scrollbar */
+          scrollbar-gutter: stable;      /* reserve scrollbar space where supported */
+        }
+        
+        /* Prefer both-edges when available for more consistent spacing */
+        @supports (scrollbar-gutter: stable both-edges) {
+          .chips { scrollbar-gutter: stable both-edges; }
+        }
+
+        /* Chip visuals (local background only) */
         .chip {
-            min-width: 70px;
-            text-align: center;
-            padding: 10px 8px;
-            background-color: var(--homey-color-blue);
-            border-radius: var(--homey-border-radius-default);
+            scroll-snap-align: start;
+            flex: 0 0 auto;
+
+            display: grid;
+            grid-template-columns: auto auto;
+            grid-template-rows: auto auto;
+            column-gap: 6px; row-gap: 2px; align-items: center;
+
+            padding: 6px 10px;
+            border-radius: var(--radius);
+            border: 1px solid var(--homey-color-separator);
+            background: var(--homey-color-mono-100);
+            color: var(--homey-color-on-surface);
+
+            min-width: 92px;
         }
-        .custom-image-class {
-            margin: var(--homey-su-3) auto var(--homey-su-5);
-        }
+
+        .chipTime { grid-column: 1 / span 2; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .chipMeta { font-size: 10px; opacity: .78; }
+        .chipRt { width: 8px; height: 8px; border-radius: 999px; background: currentColor; display:inline-block; margin-right: 4px; }
+        .chip.cancelled { opacity: .55; text-decoration: line-through; }
+
+        .empty, .err { padding: 8px; opacity: .75; }
+        .err { color: #b00020; }
+        
+        .modeIcon { font-size: 14px; line-height: 1; margin-right: 6px; }
     </style>
 </head>
-<body class="homey-widget">
-    <div class="line-container" id="departureList"></div>
-    <script type="text/javascript">
-        let stopToken = 'NSR:StopPlace:58243';
-        
-        function addMinutes(date, minutes) {
-            return new Date(date.getTime() + minutes*60000);
+<body>
+<div class="wrap">
+    <div class="top">
+        <div class="title">
+            <span>Ruter departures</span>
+        </div>
+        <div class="actions">
+            <button id="refresh" title="Refresh">↻</button>
+        </div>
+    </div>
+
+    <div id="content" class="content">
+        <div id="msg" class="empty">Loading…</div>
+    </div>
+</div>
+
+<script>
+    let refreshTimer;
+
+    // Group by public line code and keep a single representative mode for the line
+    function groupByLine(rows) {
+        const map = new Map();
+        for (const r of rows) {
+            const key = String(r.line || '?');
+            if (!map.has(key)) map.set(key, { mode: '', list: [] });
+            const g = map.get(key);
+            // If we don't have a mode yet, adopt the current row's mode if present
+            if (!g.mode && r.mode) g.mode = String(r.mode).toLowerCase();
+            g.list.push(r);
         }
-    
-        function getHourMinutesFormat(dateTime) {
-            const now = new Date();
-            const tooFarIntoFuture = dateTime > addMinutes(now, 20);
-    
-            if (tooFarIntoFuture) {
-                let hour = dateTime.getHours();
-                let minute = dateTime.getMinutes();
-                return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
-            } else {
-                let minutesIntoFuture = dateTime - now;
-                let diff = Math.round((minutesIntoFuture / 1000) / 60);
-                return diff + " min";
+        // If still no mode, scan the list once more to pick the first non-empty
+        for (const g of map.values()) {
+            if (!g.mode) {
+                const found = g.list.find(x => x.mode);
+                if (found?.mode) g.mode = String(found.mode).toLowerCase();
             }
         }
-    
-        function queryForStop(stopId) {
-            return `{
-                        stopPlace(id: "STOP_TOKEN") {
-                          name
-                          id
-                          estimatedCalls(numberOfDepartures: 10) {
-                            expectedDepartureTime
-                            aimedDepartureTime
-                            destinationDisplay {
-                              frontText
-                            }
-                            serviceJourney {
-                              line {
-                                publicCode
-                                transportMode
-                              }
-                            }
-                          }
-                        }
-                      }
-                      `.replace('STOP_TOKEN', stopId)
-        }
-    
-        function getDepartures () {
-            stopToken = this.homey.settings.get('stopToken');
-            if (!stopToken || stopToken.length === 0)
-                stopToken = 'NSR:StopPlace:58243';
-            
-            fetch('https://api.entur.io/journey-planner/v3/graphql', {
-                method: 'POST',
-                headers: {
-                    'ET-Client-Name': 'haleyproductions-ruter',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ query: queryForStop(stopToken) }),
-            })
-                .then(res => res.json())
-                .then(stopPlaceData => {
-                    let newDepartures = stopPlaceData.data.stopPlace.estimatedCalls.map((call) => ({
-                        id: `${stopToken}-${call.aimedDepartureTime}`,
-                        expectedDepartureTime: new Date(call.expectedDepartureTime),
-                        destinationDisplay: call.destinationDisplay,
-                        serviceJourney: call.serviceJourney,
-                    }))
-    
-                    let groupedDepartures = [];
-    
-                    newDepartures.map(stopPlace => {
-                        const existingLineIndex = groupedDepartures.findIndex(x => x.serviceJourney.line.publicCode == stopPlace.serviceJourney.line.publicCode);
-                        if (existingLineIndex >= 0) {
-                            groupedDepartures[existingLineIndex].departures.push(stopPlace.expectedDepartureTime);
-                        }
-                        else {
-                            groupedDepartures.push({
-                                serviceJourney: stopPlace.serviceJourney,
-                                destinationDisplay: stopPlace.destinationDisplay,
-                                departures: [stopPlace.expectedDepartureTime],
-                            })
-                        }
-                    });
-    
-                    // Generate HTML List using stopPlaceData
-                    let stopPlaceListHTML = groupedDepartures.map((departure) =>
-                        `<div class="line-item">
-                                    <h4 class="line-header">${departure.serviceJourney.line.publicCode} ${departure.destinationDisplay.frontText}</h4>
-                                    <div class="chip-container">
-                                        ${departure.departures.map(departureTime =>
-                            `<div class="chip">${getHourMinutesFormat(departureTime)}</div>`
-                        ).join('')}
-                                    </div>
-                                </div>`
-                    ).join('');
-    
-                    document.getElementById("departureList").innerHTML = stopPlaceListHTML;
-                })
-                .catch(error => {
-                    console.log(error)
-                });
-        }
-    
-        function onHomeyReady(Homey) {
-            Homey.ready();
-    
-            // Fetch something from your app.
-            Homey.api('GET', '/', {})
-                .then((result) => {
-                    console.log(result);
-                })
-                .catch(console.error);
-            
-            var departureList = document.getElementById("departureList");
-            departureList.innerHTML = 'Loading...'
-
-            Homey.settings.get('stopToken', (err, result) => {
-                if (err) return Homey.alert(err);
-                departureList.innerHTML = 'NSR:StopPlace:58243';
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        return Array.from(map.entries())
+            .sort((a, b) => collator.compare(a[0], b[0]))
+            .map(([lineCode, g]) => {
+                g.list.sort((a, b) => new Date(a.time) - new Date(b.time));
+                return { lineCode, mode: g.mode, list: g.list };
             });
+    }
 
-            return;
-
-            getDepartures();
-            setInterval(getDepartures, 5000);
+    // Covers Entur transportMode enums (lowercased): air, bus, cableway, coach,
+    // ferry, funicular, lift, metro, rail, tram, trolleybus, water
+    function iconForMode(mode) {
+        switch ((mode || '').toLowerCase()) {
+            case 'bus':        return '🚌';
+            case 'coach':      return '🚌';     // same glyph as bus
+            case 'metro':      return '🚇';
+            case 'rail':       return '🚆';
+            case 'tram':       return '🚊';
+            case 'trolleybus': return '🚎';
+            case 'ferry':      return '⛴️';
+            case 'funicular':  return '🚡';
+            case 'cableway':   return '🚠';
+            case 'lift':       return '🛗';
+            case 'water':      return '🛶';
+            case 'air':        return '✈️';
+            default:           return '🚈';     // fallback (e.g., unknown/light-rail)
         }
-    </script>
+    }
+
+    function formatTimeISO(iso, mode) {
+        const now = new Date();
+        const dt = new Date(iso);
+        const diffMin = Math.round((dt - now) / 60000);
+        if (diffMin >= 0 && diffMin < 60) return `${diffMin}m`;
+        if (mode === '24h') return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        if (mode === '12h') return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function render(data) {
+        const content = document.getElementById('content');
+        const msg = document.getElementById('msg');
+        content.innerHTML = '';
+
+        const rows = data?.rows || [];
+        const minsAhead = data?.meta?.effectiveMinutesAhead ?? 120;
+        const timeFmt   = data?.meta?.effectiveTimeFormat   ?? 'auto';
+
+        if (!rows.length) {
+            msg.textContent = `No departures in the next ${minsAhead} minutes.`;
+            content.appendChild(msg);
+            msg.style.display = '';
+            return;
+        }
+
+        const groups = groupByLine(rows);
+
+        for (const group of groups) {
+            const { lineCode, mode, list } = group;
+
+            const g = document.createElement('section');
+            g.className = 'group';
+
+            // Header with mode icon
+            const head = document.createElement('div');
+            head.className = 'groupHead';
+
+            const code = document.createElement('div');
+            code.className = 'lineCode';
+
+            const icon = document.createElement('span');
+            icon.className = 'modeIcon';
+            icon.textContent = iconForMode(mode);
+            icon.setAttribute('data-mode', String(mode || '').toLowerCase()); // add this line
+
+            const codeText = document.createTextNode(' ' + lineCode);
+
+            code.appendChild(icon);
+            code.appendChild(codeText);
+
+            const meta = document.createElement('div');
+            meta.className = 'lineMeta';
+            const destinations = new Set(list.map(x => x.destination).filter(Boolean));
+            const sameDest = destinations.size === 1 ? Array.from(destinations)[0] : '';
+            meta.textContent = sameDest
+                ? `${list.length} departures • ${sameDest}`
+                : `${list.length} departures`;
+
+            head.appendChild(code);
+            head.appendChild(meta);
+            g.appendChild(head);
+
+            // Chips under header
+            const chips = document.createElement('div');
+            chips.className = 'chips';
+
+            for (const r of list) {
+                const chip = document.createElement('div');
+                chip.className = 'chip' + (r.canceled ? ' cancelled' : '');
+
+                const timeEl = document.createElement('div');
+                timeEl.className = 'chipTime';
+                timeEl.textContent = formatTimeISO(r.time, timeFmt);
+
+                const metaLeft = document.createElement('div');
+                metaLeft.className = 'chipMeta';
+                metaLeft.textContent = r.destination || '';
+
+                const metaRight = document.createElement('div');
+                metaRight.className = 'chipMeta';
+                metaRight.textContent = r.trackOrStop ? `#${r.trackOrStop}` : '';
+
+                if (r.realtime && !r.canceled) {
+                    const dot = document.createElement('span');
+                    dot.className = 'chipRt';
+                    dot.title = 'Realtime';
+                    timeEl.prepend(dot);
+                }
+
+                chip.appendChild(timeEl);
+                chip.appendChild(metaLeft);
+                chip.appendChild(metaRight);
+                chips.appendChild(chip);
+            }
+
+            g.appendChild(chips);
+            content.appendChild(g);
+        }
+    }
+
+    function addIfPresent(params, key, val) {
+        if (val === undefined || val === null) return;
+        if (typeof val === 'string' && val.trim() === '') return;
+        params.set(key, String(val));
+    }
+
+    async function load(Homey) {
+        const s = Homey.getSettings(); // per-widget overrides (optional)
+
+        const params = new URLSearchParams({
+            useDefaults: 'true',
+            stopId: '',
+            lineFilter: ''
+        });
+
+        addIfPresent(params, 'maxResults',   s.maxResults);
+        addIfPresent(params, 'minutesAhead', s.minutesAhead);
+        addIfPresent(params, 'direction',    s.direction);
+        addIfPresent(params, 'timeFormat',   s.timeFormat);
+
+        try {
+            const data = await Homey.api('GET', '/?' + params.toString());
+            if (data.error) throw new Error(data.error);
+            render(data);
+        } catch (e) {
+            const content = document.getElementById('content');
+            content.innerHTML = '';
+            const msg = document.createElement('div');
+            msg.className = 'err';
+            msg.textContent = 'Error: ' + e.message;
+            content.appendChild(msg);
+        }
+    }
+
+    function onHomeyReady(Homey) {
+        Homey.ready({ height: 280 });
+        load(Homey);
+
+        document.getElementById('refresh').addEventListener('click', () => {
+            Homey.hapticFeedback && Homey.hapticFeedback();
+            load(Homey);
+        });
+
+        clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => load(Homey), 30000);
+    }
+</script>
 </body>
 </html>

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "compatibility": ">=12.1.0",
   "sdk": 3,
+  "brandColor": "#0066CC",
   "platforms": [
     "local",
     "cloud"
@@ -20,8 +21,7 @@
   "permissions": [],
   "images": {
     "small": "/assets/images/small.png",
-    "large": "/assets/images/large.png",
-    "xlarge": "/assets/images/xlarge.png"
+    "large": "/assets/images/large.png"
   },
   "author": {
     "name": "Ole Andreas Haley",
@@ -32,24 +32,94 @@
       "name": {
         "en": "Departures"
       },
-      "height": 188,
-      "settings": [],
+      "height": 160,
+      "transparent": false,
+      "settings": [
+        {
+          "id": "useDefaults",
+          "type": "checkbox",
+          "title": {
+            "en": "Use app defaults (stop & lines)"
+          },
+          "value": true
+        },
+        {
+          "id": "maxResults",
+          "type": "number",
+          "title": {
+            "en": "Max departures (override)"
+          },
+          "min": 1,
+          "max": 400
+        },
+        {
+          "id": "minutesAhead",
+          "type": "number",
+          "title": {
+            "en": "Minutes ahead (override)"
+          },
+          "min": 5,
+          "max": 600
+        },
+        {
+          "id": "direction",
+          "type": "dropdown",
+          "title": {
+            "en": "Direction (override)"
+          },
+          "values": [
+            {
+              "id": "any",
+              "title": {
+                "en": "Any"
+              }
+            },
+            {
+              "id": "outbound",
+              "title": {
+                "en": "Outbound"
+              }
+            },
+            {
+              "id": "inbound",
+              "title": {
+                "en": "Inbound"
+              }
+            }
+          ]
+        },
+        {
+          "id": "timeFormat",
+          "type": "dropdown",
+          "title": {
+            "en": "Time format (override)"
+          },
+          "values": [
+            {
+              "id": "auto",
+              "title": {
+                "en": "Auto (system locale)"
+              }
+            },
+            {
+              "id": "24h",
+              "title": {
+                "en": "24-hour"
+              }
+            },
+            {
+              "id": "12h",
+              "title": {
+                "en": "12-hour"
+              }
+            }
+          ]
+        }
+      ],
       "api": {
-        "getSomething": {
+        "getDepartures": {
           "method": "GET",
           "path": "/"
-        },
-        "addSomething": {
-          "method": "POST",
-          "path": "/"
-        },
-        "updateSomething": {
-          "method": "PUT",
-          "path": "/:id"
-        },
-        "deleteSomething": {
-          "method": "DELETE",
-          "path": "/:id"
         }
       },
       "id": "departures"
