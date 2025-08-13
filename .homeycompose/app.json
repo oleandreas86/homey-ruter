@@ -1,18 +1,17 @@
 {
   "id": "com.haleyproductions.ruter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "compatibility": ">=12.1.0",
   "sdk": 3,
   "brandColor": "#0066CC",
   "platforms": [
-    "local",
-    "cloud"
+    "local"
   ],
   "name": {
     "en": "Ruter"
   },
   "description": {
-    "en": "Adds Ruter.no functionality to your Homey"
+    "en": "Widget for live public transportation departures for your favorite stop, right on your Homey dashboard."
   },
   "category": [
     "internet"
@@ -26,12 +25,19 @@
     "name": "Ole Andreas Haley",
     "email": "oleandreas86@gmail.com"
   },
-  "settings": { "path": "settings/index.html" },
   "widgets": {
     "departures": {
-      "title": { "en": "Departures" },
+      "title": {
+        "en": "Departures"
+      },
       "path": "widgets/departures/public/index.html",
-      "size": { "width": 3, "height": 3 }
+      "size": {
+        "width": 3,
+        "height": 3
+      },
+      "settings": {
+        "path": "widgets/departures/public/settings.html"
+      }
     }
   }
 }
