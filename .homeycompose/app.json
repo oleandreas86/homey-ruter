@@ -1,6 +1,6 @@
 {
   "id": "com.haleyproductions.ruter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "compatibility": ">=12.1.0",
   "sdk": 3,
   "brandColor": "#0066CC",
@@ -11,7 +11,7 @@
     "en": "Ruter"
   },
   "description": {
-    "en": "Widget for live public transportation departures for your favorite stop, right on your Homey dashboard."
+    "en": "One Widget to inform you on all public transport departures for your favorite stop."
   },
   "category": [
     "internet"
